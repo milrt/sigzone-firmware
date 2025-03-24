@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+EmptyLineBeforeAccessModifier: Never
+ColumnLimit: 100
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+SpaceBeforeParens: ControlStatementsExceptControlMacros
+SortIncludes: Never
+InsertBraces: true

@@ -1,0 +1,14 @@
+tests:
+  sigzone.pytest.shell:
+    tags:
+      - sigzone
+      - trusted-firmware-m
+      - shell
+      - pytest
+    extra_configs:
+      - CONFIG_SHELL_VT100_COLORS=n
+    integration_platforms:
+      - mps2/an521/cpu0/ns
+    platform_allow:
+      - mps2/an521/cpu0/ns
+    harness: pytest

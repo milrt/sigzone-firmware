@@ -1,0 +1,35 @@
+manifest:
+  self:
+    west-commands: scripts/west-commands.yml
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+    - name: bitcoin-core
+      url-base: https://github.com/bitcoin-core
+    - name: bitcoin
+      url-base: https://github.com/bitcoin
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.0.0
+      import:
+        name-allowlist:
+          - cmsis
+          - hal_stm32
+          - trusted-firmware-m
+          - mcuboot
+          - mbedtls
+
+    - name: secp256k1
+      remote: bitcoin-core
+      revision: v0.6.0
+      path: libs/secp256k1
+    - name: bips
+      remote: bitcoin
+      revision: b9f9a8d6e854fa0b0c8f818753420b0aa6e875aa
+      path: libs/bips
+    - name: libbase58
+      remote: bitcoin
+      revision: b1dd03fa8d1be4be076bb6152325c6b5cf64f678
+      path: libs/libbase58

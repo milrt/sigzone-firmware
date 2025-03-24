@@ -1,0 +1,15 @@
+# editors
+*.swp
+*~
+
+# python
+.venv
+
+# build
+app/build*
+app/twister-out*
+__pycache__/
+
+# clang
+compile_commands.json
+.cache

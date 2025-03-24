@@ -1,0 +1,5 @@
+#include "bip39_wordlist.h"
+
+const char *bip39_wordlist_en[BIP39_WORDLIST_EN_SIZE] = {
+    @GEN_WORDLIST_EN@
+};
