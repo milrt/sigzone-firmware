@@ -1,0 +1,10 @@
+// Copyright (C) 2025 milrt <milrt@proton.me>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#ifndef BIP39_WORDLIST_H
+#define BIP39_WORDLIST_H
+
+#define BIP39_WORDLIST_EN_SIZE @GEN_WORDLIST_EN_SIZE@
+extern const char *bip39_wordlist_en[BIP39_WORDLIST_EN_SIZE];
+
+#endif // BIP39_WORDLIST_H

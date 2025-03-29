@@ -1,0 +1,17 @@
+// Copyright (C) 2025 milrt <milrt@proton.me>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#define TFM_BITCOIN_STATUS 1001
+#define TFM_BITCOIN_CREATE 1002
+#define TFM_BITCOIN_DESTROY 1003
+#define TFM_BITCOIN_OPEN 1004
+#define TFM_BITCOIN_CLOSE 1005
+#define TFM_BITCOIN_GET_PUBKEY 1006
+#define TFM_BITCOIN_SIGN_HASH 1007
+#define TFM_BITCOIN_RECOVER 1008
+#define TFM_BITCOIN_VERIFY 1009
+#define TFM_BITCOIN_CONFIRM 1010
+
+#define TFM_BITCOIN_TEST_RUN 2001
