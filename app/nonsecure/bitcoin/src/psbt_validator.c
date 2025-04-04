@@ -8,7 +8,6 @@
 #include "bitcoin/psbt_tx.h"
 #include "psbt_compactsize.h"
 #include "psbt_heap.h"
-#include "shared/hash.h"
 #include <string.h>
 #include <sys/_stdint.h>
 #include <zephyr/kernel.h>
@@ -16,33 +15,6 @@
 #include <zephyr/sys/byteorder.h>
 
 LOG_MODULE_REGISTER(psbt_validator);
-
-static psa_status_t get_wallet_fingerprint(uint8_t *fingerprint)
-{
-    uint8_t pubkey[33];
-    size_t pubkey_size = sizeof(pubkey);
-    char xpub[128];
-    size_t xpub_size = sizeof(xpub);
-
-    psa_status_t status = bitcoin_client_get_pubkey("m", pubkey, &pubkey_size, xpub, &xpub_size);
-    if (status != PSA_SUCCESS) {
-        return status;
-    }
-
-    uint8_t sha256[32];
-    uint8_t ripemd160[20];
-    status = hash_sha256(pubkey, pubkey_size, sha256, sizeof(sha256));
-    if (status != PSA_SUCCESS) {
-        return status;
-    }
-    status = hash_ripemd160(sha256, sizeof(sha256), ripemd160, sizeof(ripemd160));
-    if (status != PSA_SUCCESS) {
-        return status;
-    }
-
-    memcpy(fingerprint, ripemd160, 4);
-    return PSA_SUCCESS;
-}
 
 // TODO: parse derivation path and check is address matches.
 static bool is_change_output(psbt_map_t *output, uint8_t wallet_fingerprint[4])
@@ -62,7 +34,7 @@ psbt_result_t psbt_validate(psbt_t *psbt, psbt_validation_t *validation)
 
     // Get wallet fingerprint for change detection
     uint8_t wallet_fingerprint[4];
-    if (get_wallet_fingerprint(wallet_fingerprint) != PSA_SUCCESS) {
+    if (bitcoin_client_get_fingerprint(wallet_fingerprint) != PSA_SUCCESS) {
         LOG_ERR("PSBT validate failed. Failed to get fingerprint");
         return PSBT_OOB_WRITE;
     }
@@ -104,7 +76,7 @@ psbt_result_t psbt_validate(psbt_t *psbt, psbt_validation_t *validation)
             compactsize_read_with_data(&data, &remaining, &script_data);
 
             size_t addr_len = sizeof(address);
-            script_to_address(script_data.data, script_data.size, address, &addr_len);
+            chains_script_to_address(script_data.data, script_data.size, address, &addr_len);
         }
 
         // Create entry
@@ -140,7 +112,7 @@ psbt_result_t psbt_validate(psbt_t *psbt, psbt_validation_t *validation)
         // Get address
         char address[MAX_ADDRESS_LEN] = {0};
         size_t addr_len = sizeof(address);
-        script_to_address(txout->script, txout->script_len, address, &addr_len);
+        chains_script_to_address(txout->script, txout->script_len, address, &addr_len);
 
         // Create entry
         psbt_validation_entry_t *entry =

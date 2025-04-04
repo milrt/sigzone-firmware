@@ -197,7 +197,8 @@ static int cmd_get_pubkey(const struct shell *shell, size_t argc, char **argv)
     char xpub[128];
     size_t xpub_size = sizeof(xpub);
 
-    psa_status_t status = bitcoin_client_get_pubkey(path, pubkey, &pubkey_size, xpub, &xpub_size);
+    psa_status_t status = bitcoin_client_get_pubkey(path, chains_get_bip32_pub_version(), pubkey,
+                                                    &pubkey_size, xpub, &xpub_size);
 
     if (status != PSA_SUCCESS) {
         shell_error(shell, "Get pubkey failed: %s", psa_strerror(status));
@@ -210,7 +211,7 @@ static int cmd_get_pubkey(const struct shell *shell, size_t argc, char **argv)
     uint8_t script[MAX_SCRIPT_LEN];
     size_t script_size = sizeof(script);
 
-    status = pubkey_to_script(pubkey, pubkey_size, script, &script_size);
+    status = chains_pubkey_to_script(pubkey, pubkey_size, script, &script_size);
     if (status != PSA_SUCCESS) {
         shell_error(shell, "Script generation failed: %s", psa_strerror(status));
         return -EIO;
@@ -219,7 +220,7 @@ static int cmd_get_pubkey(const struct shell *shell, size_t argc, char **argv)
     char address[MAX_ADDRESS_LEN];
     size_t addr_size = sizeof(address);
 
-    status = script_to_address(script, script_size, address, &addr_size);
+    status = chains_script_to_address(script, script_size, address, &addr_size);
     if (status == PSA_SUCCESS) {
         shell_print(shell, "Bitcoin Address: %s", address);
     } else {
@@ -394,10 +395,10 @@ static int cmd_set_network(const struct shell *shell, size_t argc, char **argv)
         return -EINVAL;
     }
     if (strcmp(argv[1], "mainnet") == 0) {
-        set_bitcoin_network(BITCOIN_MAINNET);
+        chains_set_network(BITCOIN_MAINNET);
         shell_print(shell, "Network set to Bitcoin Mainnet.");
     } else if (strcmp(argv[1], "testnet") == 0) {
-        set_bitcoin_network(BITCOIN_TESTNET);
+        chains_set_network(BITCOIN_TESTNET);
         shell_print(shell, "Network set to Bitcoin Testnet.");
     } else {
         shell_error(shell, "Invalid network. Use 'mainnet' or 'testnet'.");

@@ -10,20 +10,20 @@ LOG_MODULE_REGISTER(chains_test);
 static void test_set_get_network(void)
 {
     // Default should be mainnet
-    TEST_ASSERT_EQUAL(get_bitcoin_network(), BITCOIN_MAINNET);
+    TEST_ASSERT_EQUAL(chains_get_network(), BITCOIN_MAINNET);
 
     // Change to testnet
-    set_bitcoin_network(BITCOIN_TESTNET);
-    TEST_ASSERT_EQUAL(get_bitcoin_network(), BITCOIN_TESTNET);
+    chains_set_network(BITCOIN_TESTNET);
+    TEST_ASSERT_EQUAL(chains_get_network(), BITCOIN_TESTNET);
 
     // Change back to mainnet
-    set_bitcoin_network(BITCOIN_MAINNET);
-    TEST_ASSERT_EQUAL(get_bitcoin_network(), BITCOIN_MAINNET);
+    chains_set_network(BITCOIN_MAINNET);
+    TEST_ASSERT_EQUAL(chains_get_network(), BITCOIN_MAINNET);
 }
 
 static void test_pubkey_to_script(void)
 {
-    set_bitcoin_network(BITCOIN_MAINNET);
+    chains_set_network(BITCOIN_MAINNET);
 
     uint8_t pubkey[33] = {0x02, 0x1e, 0x99, 0x32, 0x9b, 0xa0, 0x0c, 0x4e, 0x9a, 0x30, 0xc2,
                           0x04, 0xa1, 0x4c, 0x4b, 0x0a, 0x64, 0x40, 0xf5, 0xe6, 0x61, 0xc0,
@@ -37,26 +37,26 @@ static void test_pubkey_to_script(void)
     psa_status_t status;
 
     // Valid case
-    status = pubkey_to_script(pubkey, sizeof(pubkey), script, &script_size);
+    status = chains_pubkey_to_script(pubkey, sizeof(pubkey), script, &script_size);
     TEST_ASSERT_EQUAL(status, PSA_SUCCESS);
     TEST_ASSERT_EQUAL(script_size, 22); // P2WPKH script should be 22 bytes
     TEST_ASSERT_ARRAY_EQUAL(expectedScript, script, script_size);
 
     // Invalid: NULL pubkey
-    status = pubkey_to_script(NULL, sizeof(pubkey), script, &script_size);
+    status = chains_pubkey_to_script(NULL, sizeof(pubkey), script, &script_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 
     // Invalid: Wrong pubkey length
-    status = pubkey_to_script(pubkey, 31, script, &script_size);
+    status = chains_pubkey_to_script(pubkey, 31, script, &script_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 
     // Invalid: NULL output script buffer
-    status = pubkey_to_script(pubkey, sizeof(pubkey), NULL, &script_size);
+    status = chains_pubkey_to_script(pubkey, sizeof(pubkey), NULL, &script_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 
     // Invalid: Small output buffer
     size_t small_size = 10;
-    status = pubkey_to_script(pubkey, sizeof(pubkey), script, &small_size);
+    status = chains_pubkey_to_script(pubkey, sizeof(pubkey), script, &small_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 }
 
@@ -70,31 +70,31 @@ static void test_script_to_address(void)
     psa_status_t status;
 
     // Test on mainnet
-    set_bitcoin_network(BITCOIN_MAINNET);
-    status = script_to_address(script, sizeof(script), address, &addr_size);
+    chains_set_network(BITCOIN_MAINNET);
+    status = chains_script_to_address(script, sizeof(script), address, &addr_size);
     TEST_ASSERT_EQUAL(status, PSA_SUCCESS);
     TEST_ASSERT_NOT_NULL(address);
     TEST_ASSERT_STR_EQUAL(address, "bc1qs5lvx9ngvqm3aenmwa20lp0p84aq6e5cuayqcp");
 
     // Test on testnet
-    set_bitcoin_network(BITCOIN_TESTNET);
+    chains_set_network(BITCOIN_TESTNET);
     addr_size = MAX_ADDRESS_LEN;
-    status = script_to_address(script, sizeof(script), address, &addr_size);
+    status = chains_script_to_address(script, sizeof(script), address, &addr_size);
     TEST_ASSERT_EQUAL(status, PSA_SUCCESS);
     TEST_ASSERT_NOT_NULL(address);
     TEST_ASSERT_STR_EQUAL(address, "tb1qs5lvx9ngvqm3aenmwa20lp0p84aq6e5ckmlnrj");
 
     // Invalid: NULL script
-    status = script_to_address(NULL, sizeof(script), address, &addr_size);
+    status = chains_script_to_address(NULL, sizeof(script), address, &addr_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 
     // Invalid: Small address buffer
     size_t small_addr_size = 10;
-    status = script_to_address(script, sizeof(script), address, &small_addr_size);
+    status = chains_script_to_address(script, sizeof(script), address, &small_addr_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 
     // Invalid: Wrong script length
-    status = script_to_address(script, 10, address, &addr_size);
+    status = chains_script_to_address(script, 10, address, &addr_size);
     TEST_ASSERT_EQUAL(status, PSA_ERROR_INVALID_ARGUMENT);
 }
 

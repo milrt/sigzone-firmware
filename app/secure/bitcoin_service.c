@@ -7,7 +7,7 @@
 #include <psa/service.h>
 #include <psa_manifest/tfm_bitcoin_partition.h>
 
-// Minimal sbrk workaround for secp256k1
+// sbrk workaround for secp256k1
 void *_sbrk(ptrdiff_t incr)
 {
     return NULL;
@@ -39,43 +39,35 @@ static psa_status_t tfm_bitcoin_create_ipc(psa_msg_t *msg)
 static psa_status_t tfm_bitcoin_recover_ipc(psa_msg_t *msg)
 {
     char mnemonic_buf[256] = {0};
+
     read_string_arg(msg, 0, mnemonic_buf, sizeof(mnemonic_buf));
-    return bitcoin_core_recover(mnemonic_buf);
-}
+    psa_status_t status = bitcoin_core_recover(mnemonic_buf);
 
-struct verify_mnemonic_ctx {
-    char *out;
-    size_t out_buf_size;
-    size_t actual_size;
-};
-
-static void verify_mnemonic_writer(void *h, const char *str, size_t str_size)
-{
-    struct verify_mnemonic_ctx *ctx = (struct verify_mnemonic_ctx *)h;
-    if (str_size <= ctx->out_buf_size) {
-        memcpy(ctx->out, str, str_size);
-        ctx->actual_size = str_size;
-    }
+    mbedtls_platform_zeroize(mnemonic_buf, sizeof(mnemonic_buf));
+    return status;
 }
 
 static psa_status_t tfm_bitcoin_verify_mnemonic_ipc(psa_msg_t *msg)
 {
-    size_t out_size = msg->out_size[0];
-    char local_buf[256] = {0};
+    char mnemonic[256] = {0};
+    const size_t out_size = msg->out_size[0];
+    psa_status_t status;
 
-    struct verify_mnemonic_ctx ctx = {
-        .out = local_buf, .out_buf_size = sizeof(local_buf), .actual_size = 0};
-
-    psa_status_t status = bitcoin_core_verify(verify_mnemonic_writer, &ctx);
+    status = bitcoin_core_verify(mnemonic, sizeof(mnemonic));
     if (status != PSA_SUCCESS) {
+        mbedtls_platform_zeroize(mnemonic, sizeof(mnemonic));
         return status;
     }
 
-    if (ctx.actual_size > out_size) {
+    const size_t mnemonic_len = strlen(mnemonic) + 1;
+    if (out_size < mnemonic_len) {
+        mbedtls_platform_zeroize(mnemonic, sizeof(mnemonic));
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
 
-    psa_write(msg->handle, 0, local_buf, ctx.actual_size);
+    psa_write(msg->handle, 0, mnemonic, mnemonic_len);
+
+    mbedtls_platform_zeroize(mnemonic, sizeof(mnemonic));
     return PSA_SUCCESS;
 }
 
@@ -87,14 +79,68 @@ static psa_status_t tfm_bitcoin_confirm_mnemonic_ipc(psa_msg_t *msg)
     read_string_arg(msg, 0, pin_buf, sizeof(pin_buf));
     read_string_arg(msg, 1, mnemonic_buf, sizeof(mnemonic_buf));
 
-    return bitcoin_core_confirm(pin_buf, mnemonic_buf);
+    psa_status_t status = bitcoin_core_confirm(pin_buf, mnemonic_buf);
+
+    mbedtls_platform_zeroize(pin_buf, sizeof(pin_buf));
+    mbedtls_platform_zeroize(mnemonic_buf, sizeof(mnemonic_buf));
+    return status;
+}
+
+static psa_status_t tfm_bitcoin_get_pubkey_ipc(psa_msg_t *msg)
+{
+    char path_buf[128] = {0};
+    uint32_t version = 0;
+    uint8_t pubkey[33] = {0};
+    char xpub[112] = {0};
+    size_t pubkey_size = sizeof(pubkey);
+    const size_t xpub_size = sizeof(xpub);
+
+    // Read inputs
+    psa_read(msg->handle, 0, path_buf, sizeof(path_buf));
+    psa_read(msg->handle, 1, &version, sizeof(version));
+
+    // Get pubkeys
+    psa_status_t status =
+        bitcoin_core_get_pubkey(path_buf, version, pubkey, &pubkey_size, xpub, xpub_size);
+
+    mbedtls_platform_zeroize(path_buf, sizeof(path_buf));
+
+    if (status != PSA_SUCCESS) {
+        mbedtls_platform_zeroize(pubkey, sizeof(pubkey));
+        mbedtls_platform_zeroize(xpub, sizeof(xpub));
+        return status;
+    }
+
+    // Write outputs
+    if (msg->out_size[0] < pubkey_size) {
+        mbedtls_platform_zeroize(pubkey, sizeof(pubkey));
+        mbedtls_platform_zeroize(xpub, sizeof(xpub));
+        return PSA_ERROR_BUFFER_TOO_SMALL;
+    }
+    psa_write(msg->handle, 0, pubkey, pubkey_size);
+
+    const size_t xpub_len = strlen(xpub) + 1;
+    if (msg->out_size[1] < xpub_len) {
+        mbedtls_platform_zeroize(pubkey, sizeof(pubkey));
+        mbedtls_platform_zeroize(xpub, sizeof(xpub));
+        return PSA_ERROR_BUFFER_TOO_SMALL;
+    }
+    psa_write(msg->handle, 1, xpub, xpub_len);
+
+    mbedtls_platform_zeroize(pubkey, sizeof(pubkey));
+    mbedtls_platform_zeroize(xpub, sizeof(xpub));
+    return PSA_SUCCESS;
 }
 
 static psa_status_t tfm_bitcoin_destroy_ipc(psa_msg_t *msg)
 {
     char pin_buf[64] = {0};
     read_string_arg(msg, 0, pin_buf, sizeof(pin_buf));
-    return bitcoin_core_destroy(pin_buf);
+
+    psa_status_t status = bitcoin_core_destroy(pin_buf);
+
+    mbedtls_platform_zeroize(pin_buf, sizeof(pin_buf));
+    return status;
 }
 
 static psa_status_t tfm_bitcoin_open_ipc(psa_msg_t *msg)
@@ -102,7 +148,12 @@ static psa_status_t tfm_bitcoin_open_ipc(psa_msg_t *msg)
     char pin_buf[64] = {0}, passphrase_buf[128] = {0};
     read_string_arg(msg, 0, pin_buf, sizeof(pin_buf));
     read_string_arg(msg, 1, passphrase_buf, sizeof(passphrase_buf));
-    return bitcoin_core_open(pin_buf, passphrase_buf);
+
+    psa_status_t status = bitcoin_core_open(pin_buf, passphrase_buf);
+
+    mbedtls_platform_zeroize(pin_buf, sizeof(pin_buf));
+    mbedtls_platform_zeroize(passphrase_buf, sizeof(passphrase_buf));
+    return status;
 }
 
 static psa_status_t tfm_bitcoin_close_ipc(psa_msg_t *msg)
@@ -111,128 +162,58 @@ static psa_status_t tfm_bitcoin_close_ipc(psa_msg_t *msg)
     return bitcoin_core_close();
 }
 
-struct get_pubkey_ctx {
-    uint8_t *pubkey;
-    size_t pubkey_buf_size;
-    size_t actual_pubkey_size;
-    char *xpub;
-    size_t xpub_buf_size;
-    size_t actual_xpub_len;
-};
-
-static void pubkey_writer(void *h, const uint8_t *buf, size_t size)
-{
-    struct get_pubkey_ctx *ctx = h;
-    if (size <= ctx->pubkey_buf_size) {
-        memcpy(ctx->pubkey, buf, size);
-        ctx->actual_pubkey_size = size;
-    }
-}
-
-static void xpub_writer(void *h, const char *str, size_t str_size)
-{
-    struct get_pubkey_ctx *ctx = h;
-    if (str_size <= ctx->xpub_buf_size) {
-        memcpy(ctx->xpub, str, str_size);
-        ctx->actual_xpub_len = str_size;
-    }
-}
-
-static psa_status_t tfm_bitcoin_get_pubkey_ipc(psa_msg_t *msg)
-{
-    char path_buf[128] = {0};
-    psa_read(msg->handle, 0, path_buf, sizeof(path_buf) - 1);
-
-    size_t pubkey_size = msg->out_size[0];
-    size_t xpub_buf_size = msg->out_size[1];
-
-    uint8_t pubkey_local[64] = {0};
-    char xpub_local[128] = {0};
-
-    struct get_pubkey_ctx ctx = {0};
-    ctx.pubkey = pubkey_local;
-    ctx.pubkey_buf_size = sizeof(pubkey_local);
-    ctx.xpub = xpub_local;
-    ctx.xpub_buf_size = sizeof(xpub_local);
-
-    psa_status_t status = bitcoin_core_get_pubkey(path_buf, &ctx.actual_pubkey_size, pubkey_writer,
-                                                  xpub_writer, &ctx);
-    if (status != PSA_SUCCESS) {
-        return status;
-    }
-
-    if (ctx.actual_pubkey_size > pubkey_size) {
-        return PSA_ERROR_BUFFER_TOO_SMALL;
-    }
-    psa_write(msg->handle, 0, pubkey_local, ctx.actual_pubkey_size);
-
-    if (ctx.actual_xpub_len == 0) {
-        ctx.actual_xpub_len = strlen(xpub_local) + 1;
-    }
-    if (ctx.actual_xpub_len > xpub_buf_size) {
-        return PSA_ERROR_BUFFER_TOO_SMALL;
-    }
-    psa_write(msg->handle, 1, xpub_local, ctx.actual_xpub_len);
-
-    return PSA_SUCCESS;
-}
-
-struct sign_hash_ctx {
-    uint8_t *hash_ptr;
-    size_t hash_len;
-    uint8_t *der_ptr;
-    size_t der_buf_size;
-    size_t actual_sig_size;
-};
-
-static size_t signhash_read_hash(void *h, uint8_t *out, size_t out_size)
-{
-    struct sign_hash_ctx *ctx = h;
-    if (out_size >= ctx->hash_len) {
-        memcpy(out, ctx->hash_ptr, ctx->hash_len);
-        return ctx->hash_len;
-    }
-    return 0;
-}
-
-static void signhash_write_sig(void *h, const uint8_t *buf, size_t size)
-{
-    struct sign_hash_ctx *ctx = h;
-    if (size <= ctx->der_buf_size) {
-        memcpy(ctx->der_ptr, buf, size);
-        ctx->actual_sig_size = size;
-    }
-}
-
 static psa_status_t tfm_bitcoin_sign_hash_ipc(psa_msg_t *msg)
 {
     char path_buf[128] = {0};
-    psa_read(msg->handle, 0, path_buf, sizeof(path_buf) - 1);
+    uint8_t hash[32] = {0};
+    uint8_t signature[72] = {0};
+    size_t signature_size = sizeof(signature);
 
-    uint8_t hash_buf[32] = {0};
-    if (psa_read(msg->handle, 1, hash_buf, sizeof(hash_buf)) != 32) {
+    // Read inputs
+    psa_read(msg->handle, 0, path_buf, sizeof(path_buf));
+    if (psa_read(msg->handle, 1, hash, sizeof(hash)) != sizeof(hash)) {
+        mbedtls_platform_zeroize(hash, sizeof(hash));
+        mbedtls_platform_zeroize(path_buf, sizeof(path_buf));
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    uint8_t der_local[80] = {0};
-    size_t der_buf_size = msg->out_size[0];
+    // Sign hash
+    psa_status_t status =
+        bitcoin_core_sign_hash(path_buf, hash, sizeof(hash), signature, &signature_size);
 
-    struct sign_hash_ctx ctx = {0};
-    ctx.hash_ptr = hash_buf;
-    ctx.hash_len = 32;
-    ctx.der_ptr = der_local;
-    ctx.der_buf_size = sizeof(der_local);
-    ctx.actual_sig_size = sizeof(der_local);
+    mbedtls_platform_zeroize(hash, sizeof(hash));
+    mbedtls_platform_zeroize(path_buf, sizeof(path_buf));
 
-    psa_status_t status = bitcoin_core_sign_hash(path_buf, signhash_read_hash, &ctx.actual_sig_size,
-                                                 signhash_write_sig, &ctx);
+    if (status != PSA_SUCCESS) {
+        mbedtls_platform_zeroize(signature, sizeof(signature));
+        return status;
+    }
+
+    // Write output
+    if (msg->out_size[0] < signature_size) {
+        mbedtls_platform_zeroize(signature, sizeof(signature));
+        return PSA_ERROR_BUFFER_TOO_SMALL;
+    }
+    psa_write(msg->handle, 0, signature, signature_size);
+
+    mbedtls_platform_zeroize(signature, sizeof(signature));
+    return PSA_SUCCESS;
+}
+
+static psa_status_t tfm_bitcoin_get_fingerprint_ipc(psa_msg_t *msg)
+{
+    uint8_t fingerprint[4] = {0};
+    size_t fingerprint_size = sizeof(fingerprint);
+
+    psa_status_t status = bitcoin_core_get_fingerprint(fingerprint, &fingerprint_size);
     if (status != PSA_SUCCESS) {
         return status;
     }
-    if (ctx.actual_sig_size > der_buf_size) {
+
+    if (msg->out_size[0] < fingerprint_size) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
-    psa_write(msg->handle, 0, der_local, ctx.actual_sig_size);
+    psa_write(msg->handle, 0, fingerprint, fingerprint_size);
     return PSA_SUCCESS;
 }
 
@@ -285,9 +266,12 @@ static void handle_bitcoin_signal(psa_msg_t *msg)
         rc = tfm_bitcoin_verify_mnemonic_ipc(msg);
         psa_reply(msg->handle, rc);
         break;
-
     case TFM_BITCOIN_CONFIRM:
         rc = tfm_bitcoin_confirm_mnemonic_ipc(msg);
+        psa_reply(msg->handle, rc);
+        break;
+    case TFM_BITCOIN_GET_FINGERPRINT:
+        rc = tfm_bitcoin_get_fingerprint_ipc(msg);
         psa_reply(msg->handle, rc);
         break;
     case PSA_IPC_DISCONNECT:

@@ -140,8 +140,9 @@ psa_status_t bitcoin_client_close(void)
     return status;
 }
 
-psa_status_t bitcoin_client_get_pubkey(const char *derivation_path, uint8_t *pubkey_out,
-                                       size_t *pubkey_size, char *xpub_out, size_t *xpub_size)
+psa_status_t bitcoin_client_get_pubkey(const char *derivation_path, uint32_t version,
+                                       uint8_t *pubkey_out, size_t *pubkey_size, char *xpub_out,
+                                       size_t *xpub_size)
 {
     if (!pubkey_out || !pubkey_size || !xpub_out || !xpub_size) {
         return PSA_ERROR_INVALID_ARGUMENT;
@@ -154,6 +155,7 @@ psa_status_t bitcoin_client_get_pubkey(const char *derivation_path, uint8_t *pub
 
     psa_invec in_vec[] = {
         {.base = derivation_path, .len = (derivation_path ? strlen(derivation_path) + 1 : 0)},
+        {.base = &version, .len = sizeof(version)},
     };
 
     psa_outvec out_vec[] = {
@@ -198,6 +200,28 @@ psa_status_t bitcoin_client_sign_hash(const char *derivation_path, const uint8_t
                                    out_vec, IOVEC_LEN(out_vec));
 
     *signature_size = out_vec[0].len;
+
+    psa_close(handle);
+    return status;
+}
+
+psa_status_t bitcoin_client_get_fingerprint(uint8_t *fingerprint)
+{
+    if (!fingerprint) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    psa_handle_t handle = psa_connect(TFM_BITCOIN_SID, TFM_BITCOIN_VERSION);
+    if (!PSA_HANDLE_IS_VALID(handle)) {
+        return PSA_ERROR_GENERIC_ERROR;
+    }
+
+    psa_invec in_vec[] = {};
+    psa_outvec out_vec[] = {
+        {.base = fingerprint, .len = 4},
+    };
+
+    psa_status_t status = psa_call(handle, TFM_BITCOIN_GET_FINGERPRINT, in_vec, 0, out_vec, 1);
 
     psa_close(handle);
     return status;

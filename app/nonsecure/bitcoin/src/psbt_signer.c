@@ -55,32 +55,6 @@ static psbt_result_t parse_derivation_path(const uint8_t *value_data, size_t val
     return PSBT_OK;
 }
 
-/* Retrieve the wallet fingerprint based on the BIP32 master pubkey */
-static psbt_result_t get_wallet_fingerprint(uint8_t *fingerprint)
-{
-    uint8_t pubkey[33];
-    size_t pubkey_size = sizeof(pubkey);
-    char xpub[128];
-    size_t xpub_size = sizeof(xpub);
-    psa_status_t status = bitcoin_client_get_pubkey("m", pubkey, &pubkey_size, xpub, &xpub_size);
-    if (status != PSA_SUCCESS) {
-        return PSBT_OOB_WRITE;
-    }
-
-    uint8_t sha256[32], ripemd160[20];
-    status = hash_sha256(pubkey, pubkey_size, sha256, sizeof(sha256));
-    if (status != PSA_SUCCESS) {
-        return PSBT_OOB_WRITE;
-    }
-    status = hash_ripemd160(sha256, sizeof(sha256), ripemd160, sizeof(ripemd160));
-    if (status != PSA_SUCCESS) {
-        return PSBT_OOB_WRITE;
-    }
-
-    memcpy(fingerprint, ripemd160, 4);
-    return PSBT_OK;
-}
-
 /* Helper: Compute double SHA256 over previous outputs */
 static psbt_result_t calc_hash_prevouts(const psbt_tx_t *tx, uint8_t *hash_prevouts)
 {
@@ -377,10 +351,10 @@ psbt_result_t psbt_sign(psbt_t *psbt)
     }
 
     uint8_t wallet_fingerprint[4];
-    res = get_wallet_fingerprint(wallet_fingerprint);
-    if (res != PSBT_OK) {
+    psa_status_t status = bitcoin_client_get_fingerprint(wallet_fingerprint);
+    if (status != PSA_SUCCESS) {
         psbt_tx_free(&tx);
-        return res;
+        return PSBT_OOB_WRITE;
     }
 
     for (size_t i = 0; i < psbt->num_inputs; i++) {

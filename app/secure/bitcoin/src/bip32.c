@@ -15,16 +15,9 @@
 
 #define BIP32_SERIALIZED_SIZE 78
 
-// Version constants
-#define BIP32_VERSION_MAIN_PRIVATE 0x0488ADE4 // xprv
-#define BIP32_VERSION_MAIN_PUBLIC 0x0488B21E  // xpub
-
 // Hardened child index bit
 #define BIP32_HARDENED 0x80000000
 
-/**
- * Utility: convert a 32-byte private key to a 33-byte compressed pubkey.
- */
 static psa_status_t privkey_to_pubkey(const uint8_t *privkey, uint8_t *out_pubkey33)
 {
     uint8_t ctx_mem[secp256k1_get_context_size()];
@@ -57,37 +50,55 @@ cleanup:
     return status;
 }
 
-/**
- * Utility: compute parent fingerprint from private key (by deriving its public key).
- */
-static psa_status_t get_fingerprint_from_privkey(const uint8_t *privkey, uint8_t fingerprint[4])
+static psa_status_t get_fingerprint(const uint8_t *pubkey, uint8_t fingerprint[4])
 {
+    if (!pubkey || !fingerprint) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
     psa_status_t status;
-    uint8_t pubkey[33] = {0};
     uint8_t sha256[32] = {0};
     uint8_t ripemd160[20] = {0};
+
+    // Step 1: SHA256(pubkey)
+    status = hash_sha256(pubkey, 33, sha256, sizeof(sha256));
+    if (status != PSA_SUCCESS) {
+        goto cleanup;
+    }
+
+    // Step 2: RIPEMD160(SHA256(pubkey))
+    status = hash_ripemd160(sha256, sizeof(sha256), ripemd160, sizeof(ripemd160));
+    if (status != PSA_SUCCESS) {
+        goto cleanup;
+    }
+
+    // Step 3: First 4 bytes = fingerprint
+    memcpy(fingerprint, ripemd160, 4);
+
+cleanup:
+    mbedtls_platform_zeroize(sha256, sizeof(sha256));
+    mbedtls_platform_zeroize(ripemd160, sizeof(ripemd160));
+    return status;
+}
+
+static psa_status_t get_fingerprint_from_privkey(const uint8_t *privkey, uint8_t fingerprint[4])
+{
+    if (!privkey || !fingerprint) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    psa_status_t status;
+    uint8_t pubkey[33] = {0};
 
     status = privkey_to_pubkey(privkey, pubkey);
     if (status != PSA_SUCCESS) {
         goto cleanup;
     }
 
-    status = hash_sha256(pubkey, sizeof(pubkey), sha256, sizeof(sha256));
-    if (status != PSA_SUCCESS) {
-        goto cleanup;
-    }
-
-    status = hash_ripemd160(sha256, sizeof(sha256), ripemd160, sizeof(ripemd160));
-    if (status != PSA_SUCCESS) {
-        goto cleanup;
-    }
-
-    memcpy(fingerprint, ripemd160, 4);
+    status = get_fingerprint(pubkey, fingerprint);
 
 cleanup:
     mbedtls_platform_zeroize(pubkey, sizeof(pubkey));
-    mbedtls_platform_zeroize(sha256, sizeof(sha256));
-    mbedtls_platform_zeroize(ripemd160, sizeof(ripemd160));
     return status;
 }
 
@@ -329,8 +340,8 @@ cleanup:
     return status;
 }
 
-psa_status_t bip32_extended_privkey_serialize(const bip32_extended_privkey_t *key, char *output,
-                                              size_t *output_size)
+psa_status_t bip32_extended_privkey_serialize(const bip32_extended_privkey_t *key, uint32_t version,
+                                              char *output, size_t *output_size)
 {
     if (!key || !output || !output_size || *output_size < BIP32_MAX_SERIALIZED_SIZE) {
         return PSA_ERROR_INVALID_ARGUMENT;
@@ -340,11 +351,11 @@ psa_status_t bip32_extended_privkey_serialize(const bip32_extended_privkey_t *ke
     uint8_t data[BIP32_SERIALIZED_SIZE + 4] = {0};
     psa_status_t status = PSA_ERROR_GENERIC_ERROR;
 
-    // 1) 4-byte version for xprv
-    data[0] = (BIP32_VERSION_MAIN_PRIVATE >> 24) & 0xFF;
-    data[1] = (BIP32_VERSION_MAIN_PRIVATE >> 16) & 0xFF;
-    data[2] = (BIP32_VERSION_MAIN_PRIVATE >> 8) & 0xFF;
-    data[3] = (BIP32_VERSION_MAIN_PRIVATE) & 0xFF;
+    // 1) 4-byte version
+    data[0] = (version >> 24) & 0xFF;
+    data[1] = (version >> 16) & 0xFF;
+    data[2] = (version >> 8) & 0xFF;
+    data[3] = (version) & 0xFF;
 
     // 2) depth
     data[4] = key->depth;
@@ -380,7 +391,8 @@ cleanup:
     return status;
 }
 
-psa_status_t bip32_extended_privkey_deserialize(const char *input, bip32_extended_privkey_t *key)
+psa_status_t bip32_extended_privkey_deserialize(const char *input, uint32_t expected_version,
+                                                bip32_extended_privkey_t *key)
 {
     if (!input || !key) {
         return PSA_ERROR_INVALID_ARGUMENT;
@@ -403,8 +415,8 @@ psa_status_t bip32_extended_privkey_deserialize(const char *input, bip32_extende
     uint32_t ver = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) |
                    ((uint32_t)data[2] << 8) | (uint32_t)data[3];
 
-    if (ver != BIP32_VERSION_MAIN_PRIVATE) {
-        return PSA_ERROR_INVALID_ARGUMENT; // not xprv
+    if (ver != expected_version) {
+        return PSA_ERROR_INVALID_ARGUMENT;
     }
 
     // depth
@@ -446,10 +458,6 @@ psa_status_t bip32_extended_privkey_deserialize(const char *input, bip32_extende
     return valid ? PSA_SUCCESS : PSA_ERROR_INVALID_ARGUMENT;
 }
 
-// ==========================================================================
-// Extended Public Key Functions
-// ==========================================================================
-
 psa_status_t bip32_extended_pubkey_from_privkey(const bip32_extended_privkey_t *privkey,
                                                 bip32_extended_pubkey_t *out_pubkey)
 {
@@ -471,8 +479,8 @@ psa_status_t bip32_extended_pubkey_from_privkey(const bip32_extended_privkey_t *
     return PSA_SUCCESS;
 }
 
-psa_status_t bip32_extended_pubkey_serialize(const bip32_extended_pubkey_t *key, char *output,
-                                             size_t *output_size)
+psa_status_t bip32_extended_pubkey_serialize(const bip32_extended_pubkey_t *key, uint32_t version,
+                                             char *output, size_t *output_size)
 {
     if (!key || !output || !output_size || *output_size < BIP32_MAX_SERIALIZED_SIZE) {
         return PSA_ERROR_INVALID_ARGUMENT;
@@ -481,11 +489,11 @@ psa_status_t bip32_extended_pubkey_serialize(const bip32_extended_pubkey_t *key,
     psa_status_t status = PSA_ERROR_GENERIC_ERROR;
     uint8_t data[BIP32_SERIALIZED_SIZE + 4] = {0};
 
-    // 1) 4-byte version for xpub
-    data[0] = (BIP32_VERSION_MAIN_PUBLIC >> 24) & 0xFF;
-    data[1] = (BIP32_VERSION_MAIN_PUBLIC >> 16) & 0xFF;
-    data[2] = (BIP32_VERSION_MAIN_PUBLIC >> 8) & 0xFF;
-    data[3] = (BIP32_VERSION_MAIN_PUBLIC) & 0xFF;
+    // 1) 4-byte version
+    data[0] = (version >> 24) & 0xFF;
+    data[1] = (version >> 16) & 0xFF;
+    data[2] = (version >> 8) & 0xFF;
+    data[3] = (version) & 0xFF;
 
     // 2) depth
     data[4] = key->depth;
@@ -518,7 +526,8 @@ cleanup:
     return status;
 }
 
-psa_status_t bip32_extended_pubkey_deserialize(const char *input, bip32_extended_pubkey_t *key)
+psa_status_t bip32_extended_pubkey_deserialize(const char *input, uint32_t expected_version,
+                                               bip32_extended_pubkey_t *key)
 {
     if (!input || !key) {
         return PSA_ERROR_INVALID_ARGUMENT;
@@ -540,8 +549,7 @@ psa_status_t bip32_extended_pubkey_deserialize(const char *input, bip32_extended
     // Parse version
     uint32_t ver = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) |
                    ((uint32_t)data[2] << 8) | (uint32_t)data[3];
-    if (ver != BIP32_VERSION_MAIN_PUBLIC) {
-        // Not xpub
+    if (ver != expected_version) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
@@ -595,4 +603,19 @@ psa_status_t bip32_extended_pubkey_deserialize(const char *input, bip32_extended
 cleanup:
     mbedtls_platform_zeroize(data, sizeof(data));
     return status;
+}
+
+psa_status_t bip32_extended_pubkey_get_fingerprint(const bip32_extended_pubkey_t *key,
+                                                   uint8_t *fingerprint)
+{
+    if (!key || !fingerprint) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    psa_status_t status = get_fingerprint(key->pubkey, fingerprint);
+    if (status != PSA_SUCCESS) {
+        return status;
+    }
+
+    return PSA_SUCCESS;
 }

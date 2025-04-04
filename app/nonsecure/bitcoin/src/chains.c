@@ -17,6 +17,7 @@ typedef enum {
 typedef struct {
     address_type_t type;
     const char *hrp;
+    uint32_t bip32_pub_version;
 } address_format_t;
 
 static network_type_t current_network = BITCOIN_MAINNET;
@@ -24,11 +25,13 @@ static network_type_t current_network = BITCOIN_MAINNET;
 static const address_format_t MAINNET_P2WPKH = {
     .type = ADDR_TYPE_P2WPKH,
     .hrp = "bc",
+    .bip32_pub_version = 0x0488B21E,
 };
 
 static const address_format_t TESTNET_P2WPKH = {
     .type = ADDR_TYPE_P2WPKH,
     .hrp = "tb",
+    .bip32_pub_version = 0x043587CF,
 };
 
 static const address_format_t *get_default_address_format(void)
@@ -36,18 +39,23 @@ static const address_format_t *get_default_address_format(void)
     return (current_network == BITCOIN_MAINNET) ? &MAINNET_P2WPKH : &TESTNET_P2WPKH;
 }
 
-void set_bitcoin_network(network_type_t network)
+void chains_set_network(network_type_t network)
 {
     current_network = network;
 }
 
-network_type_t get_bitcoin_network(void)
+network_type_t chains_get_network(void)
 {
     return current_network;
 }
 
-psa_status_t pubkey_to_script(const uint8_t *pubkey, size_t pubkey_len, uint8_t *script_out,
-                              size_t *script_size)
+uint32_t chains_get_bip32_pub_version(void)
+{
+    return get_default_address_format()->bip32_pub_version;
+}
+
+psa_status_t chains_pubkey_to_script(const uint8_t *pubkey, size_t pubkey_len, uint8_t *script_out,
+                                     size_t *script_size)
 {
     if (!pubkey || pubkey_len != 33 || !script_out || !script_size ||
         *script_size < MAX_SCRIPT_LEN) {
@@ -77,8 +85,8 @@ psa_status_t pubkey_to_script(const uint8_t *pubkey, size_t pubkey_len, uint8_t 
     return PSA_ERROR_INVALID_ARGUMENT;
 }
 
-psa_status_t script_to_address(const uint8_t *script, size_t script_len, char *address_out,
-                               size_t *addr_size)
+psa_status_t chains_script_to_address(const uint8_t *script, size_t script_len, char *address_out,
+                                      size_t *addr_size)
 {
     if (!script || script_len == 0 || !address_out || !addr_size || *addr_size < MAX_ADDRESS_LEN) {
         return PSA_ERROR_INVALID_ARGUMENT;

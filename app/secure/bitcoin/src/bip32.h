@@ -25,9 +25,10 @@ psa_status_t bip32_seed_to_master_privkey(const uint8_t *seed, size_t seed_size,
 psa_status_t bip32_extended_privkey_derive_from_path(const bip32_extended_privkey_t *master_key,
                                                      const char *path_str,
                                                      bip32_extended_privkey_t *derived_key);
-psa_status_t bip32_extended_privkey_serialize(const bip32_extended_privkey_t *key, char *output,
-                                              size_t *output_size);
-psa_status_t bip32_extended_privkey_deserialize(const char *input, bip32_extended_privkey_t *key);
+psa_status_t bip32_extended_privkey_serialize(const bip32_extended_privkey_t *key, uint32_t version,
+                                              char *output, size_t *output_size);
+psa_status_t bip32_extended_privkey_deserialize(const char *input, uint32_t expected_version,
+                                                bip32_extended_privkey_t *key);
 
 typedef struct {
     uint8_t pubkey[33];
@@ -39,6 +40,9 @@ typedef struct {
 
 psa_status_t bip32_extended_pubkey_from_privkey(const bip32_extended_privkey_t *privkey,
                                                 bip32_extended_pubkey_t *out_pubkey);
-psa_status_t bip32_extended_pubkey_serialize(const bip32_extended_pubkey_t *key, char *output,
-                                             size_t *output_size);
-psa_status_t bip32_extended_pubkey_deserialize(const char *input, bip32_extended_pubkey_t *key);
+psa_status_t bip32_extended_pubkey_serialize(const bip32_extended_pubkey_t *key, uint32_t version,
+                                             char *output, size_t *output_size);
+psa_status_t bip32_extended_pubkey_deserialize(const char *input, uint32_t expected_version,
+                                               bip32_extended_pubkey_t *key);
+psa_status_t bip32_extended_pubkey_get_fingerprint(const bip32_extended_pubkey_t *key,
+                                                   uint8_t *fingerprint);

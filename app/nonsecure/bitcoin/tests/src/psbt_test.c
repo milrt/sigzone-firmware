@@ -185,7 +185,7 @@ static void init()
     int res =
         base64_decode(psbt_raw, sizeof(psbt_raw), &psbt_raw_size, psbt_base64, strlen(psbt_base64));
     TEST_ASSERT_EQUAL(0, res);
-    set_bitcoin_network(BITCOIN_TESTNET);
+    chains_set_network(BITCOIN_TESTNET);
 }
 
 void psbt_test_run_all(void)

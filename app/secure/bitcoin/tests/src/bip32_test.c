@@ -8,6 +8,9 @@
 #include "tfm_sp_log.h"
 #include <string.h>
 
+#define PUB_VERSION 0x0488B21E
+#define PRIV_VERSION 0x0488ADE4
+
 static void test_valid_vectors(void)
 {
     for (size_t i = 0; i < BIP32_TEST_VECTOR_COUNT; i++) {
@@ -24,14 +27,14 @@ static void test_valid_vectors(void)
         // Test serialization
         char serialized[BIP32_MAX_SERIALIZED_SIZE];
         size_t serialized_size = sizeof(serialized);
-        TEST_ASSERT_EQUAL(PSA_SUCCESS,
-                          bip32_extended_privkey_serialize(&key, serialized, &serialized_size));
+        TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_privkey_serialize(
+                                           &key, PRIV_VERSION, serialized, &serialized_size));
         TEST_ASSERT_STR_EQUAL(serialized, vec->xprv);
 
         // Test deserialization
         bip32_extended_privkey_t deserialized;
-        TEST_ASSERT_EQUAL(PSA_SUCCESS,
-                          bip32_extended_privkey_deserialize(vec->xprv, &deserialized));
+        TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_privkey_deserialize(vec->xprv, PRIV_VERSION,
+                                                                          &deserialized));
         TEST_ASSERT_ARRAY_EQUAL(key.private_key, deserialized.private_key, 32);
         TEST_ASSERT_ARRAY_EQUAL(key.chain_code, deserialized.chain_code, 32);
 
@@ -41,14 +44,14 @@ static void test_valid_vectors(void)
 
         // Test pubkey serialization
         serialized_size = sizeof(serialized);
-        TEST_ASSERT_EQUAL(PSA_SUCCESS,
-                          bip32_extended_pubkey_serialize(&pubkey, serialized, &serialized_size));
+        TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_pubkey_serialize(
+                                           &pubkey, PUB_VERSION, serialized, &serialized_size));
         TEST_ASSERT_STR_EQUAL(serialized, vec->xpub);
 
         // Test pubkey deserialization
         bip32_extended_pubkey_t deserialized_pubkey;
-        TEST_ASSERT_EQUAL(PSA_SUCCESS,
-                          bip32_extended_pubkey_deserialize(vec->xpub, &deserialized_pubkey));
+        TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_pubkey_deserialize(vec->xpub, PUB_VERSION,
+                                                                         &deserialized_pubkey));
         TEST_ASSERT_ARRAY_EQUAL(pubkey.pubkey, deserialized_pubkey.pubkey, 33);
         TEST_ASSERT_ARRAY_EQUAL(pubkey.chain_code, deserialized_pubkey.chain_code, 32);
     }
@@ -61,7 +64,8 @@ static void test_invalid_vectors(void)
 
         if (vec->xprv) {
             bip32_extended_privkey_t deserialized;
-            psa_status_t status = bip32_extended_privkey_deserialize(vec->xprv, &deserialized);
+            psa_status_t status =
+                bip32_extended_privkey_deserialize(vec->xprv, PRIV_VERSION, &deserialized);
             if (status == PSA_SUCCESS) {
                 LOG_ERRFMT("Test %d failed description: %s\n", i, vec->description);
             }
@@ -70,7 +74,8 @@ static void test_invalid_vectors(void)
 
         if (vec->xpub) {
             bip32_extended_pubkey_t deserialized;
-            psa_status_t status = bip32_extended_pubkey_deserialize(vec->xpub, &deserialized);
+            psa_status_t status =
+                bip32_extended_pubkey_deserialize(vec->xpub, PUB_VERSION, &deserialized);
             if (status == PSA_SUCCESS) {
                 LOG_ERRFMT("Test %d failed description: %s\n", i, vec->description);
             }
@@ -87,13 +92,14 @@ static void test_key_serialization_roundtrip(void)
 
     bip32_extended_privkey_t key;
     // Unit-test: Success
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_privkey_deserialize(test_xprv, &key));
+    TEST_ASSERT_EQUAL(PSA_SUCCESS,
+                      bip32_extended_privkey_deserialize(test_xprv, PRIV_VERSION, &key));
 
     char serialized[BIP32_MAX_SERIALIZED_SIZE];
     size_t serialized_size = sizeof(serialized);
     // Unit-test: Fails here
-    TEST_ASSERT_EQUAL(
-        PSA_SUCCESS, bip32_extended_privkey_serialize(&key, serialized, &serialized_size)); // Fails
+    TEST_ASSERT_EQUAL(PSA_SUCCESS, bip32_extended_privkey_serialize(&key, PRIV_VERSION, serialized,
+                                                                    &serialized_size)); // Fails
     // Unit-test: Fails here
     TEST_ASSERT_STR_EQUAL(test_xprv, serialized); // Fails
 }
