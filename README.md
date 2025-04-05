@@ -47,15 +47,4 @@ west twister -T .
 ```
 
 ## Shell
-
-sigzone includes a built-in Zephyr shell interface for interacting with the wallet firmware.
-
-You can:
-
-- Create, recover, open, and destroy wallets
-- Load from mnemonic phrases
-- Derive and view public keys + Bitcoin addresses
-- Sign raw hashes or complete PSBTs
-- Parse and validate PSBTs
-- Switch between mainnet and testnet
-- Run unit tests from both the secure and non-secure environments
+https://github.com/user-attachments/assets/1d8ab99f-acc1-493f-974d-9b9c33006e87
