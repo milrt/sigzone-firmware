@@ -91,7 +91,7 @@ static psa_status_t tfm_bitcoin_get_pubkey_ipc(psa_msg_t *msg)
     char path_buf[128] = {0};
     uint32_t version = 0;
     uint8_t pubkey[33] = {0};
-    char xpub[112] = {0};
+    char xpub[113] = {0};
     size_t pubkey_size = sizeof(pubkey);
     const size_t xpub_size = sizeof(xpub);
 
