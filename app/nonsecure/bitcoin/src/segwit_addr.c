@@ -19,15 +19,13 @@ static inline uint32_t bech32_const_for_version(uint8_t witness_ver)
 
 static const char *CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 static int8_t charset_rev[128];
-static bool g_charset_rev_init;
 
-static void init_charset_rev(void)
+__attribute__((constructor)) static void init_charset_rev()
 {
     memset(charset_rev, -1, sizeof(charset_rev));
     for (int i = 0; i < 32; i++) {
         charset_rev[(int)CHARSET[i]] = (int8_t)i;
     }
-    g_charset_rev_init = true;
 }
 
 static const uint32_t GEN[5] = {0x3b6a57b2UL, 0x26508e6dUL, 0x1ea119faUL, 0x3d4233ddUL,
@@ -118,9 +116,6 @@ psa_status_t segwit_addr_encode(const char *hrp, size_t hrp_len, uint8_t witness
     if (*out_size < SEGWIT_ADDR_MAX_ADDRESS_LEN) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
-    if (!g_charset_rev_init) {
-        init_charset_rev();
-    }
 
     /* Prepare data: version + converted witness program */
     uint8_t tmp[128] = {0};
@@ -158,9 +153,6 @@ psa_status_t segwit_addr_decode(const char *addr, char *out_hrp, size_t *out_hrp
 {
     if (!addr || !out_hrp || !out_hrp_len || !witness_ver || !witness_prog || !wp_size) {
         return PSA_ERROR_INVALID_ARGUMENT;
-    }
-    if (!g_charset_rev_init) {
-        init_charset_rev();
     }
 
     size_t addr_len = strlen(addr);

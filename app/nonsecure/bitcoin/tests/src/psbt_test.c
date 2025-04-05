@@ -11,12 +11,6 @@
 #include "shared/test_util.h"
 #include <zephyr/sys/base64.h>
 
-// Testnet wallet 1: guess nuclear width pave clap crumble rain dance nurse bind parrot yellow
-// Passphrase: sigzone
-//
-// Testnet wallet 2: body auto ride verb document bitter hen denial possible have index repeat
-// Passphrase: s
-
 static const char *psbt_base64 =
     "cHNidP8BAHECAAAAAQmRtjBtG4pseYo9aWA6Cjst0E5db1QhSAHBSovQGSk5AQAAAAD9////"
     "Apg6AAAAAAAAFgAUAhwwpCAd2VHnZbXafW/"
@@ -31,6 +25,29 @@ static const char *psbt_base64 =
 
 static uint8_t psbt_raw[4096];
 static size_t psbt_raw_size = 0;
+
+static void open_wallet()
+{
+    char mnemonic[256];
+    size_t mnemonic_size = sizeof(mnemonic);
+
+    psa_status_t status;
+    status = bitcoin_client_recover(
+        "guess nuclear width pave clap crumble rain dance nurse bind parrot yellow");
+    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+    status = bitcoin_client_verify(mnemonic, &mnemonic_size);
+    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+    status = bitcoin_client_confirm("1", mnemonic);
+    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+    status = bitcoin_client_open("1", "sigzone");
+    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+}
+
+static void destroy_wallet()
+{
+    bitcoin_client_close();
+    bitcoin_client_destroy("1");
+}
 
 static void test_serialize_deserialize()
 {
@@ -58,19 +75,7 @@ static void test_serialize_deserialize()
 
 static void test_validator()
 {
-    char mnemonic[256];
-    size_t mnemonic_size = sizeof(mnemonic);
-
-    psa_status_t status;
-    status = bitcoin_client_recover(
-        "guess nuclear width pave clap crumble rain dance nurse bind parrot yellow");
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_verify(mnemonic, &mnemonic_size);
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_confirm("1", mnemonic);
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_open("1", "sigzone");
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+    open_wallet();
 
     psbt_t psbt = {0};
     psbt_result_t result = psbt_create_from_bin(&psbt, psbt_raw, psbt_raw_size);
@@ -117,8 +122,7 @@ static void test_validator()
     psbt_validation_free(&validation);
     psbt_free(&psbt);
 
-    bitcoin_client_close();
-    bitcoin_client_destroy("1");
+    destroy_wallet();
 }
 
 static void test_signer()
@@ -138,19 +142,7 @@ static void test_signer()
         "9cm4gBAAAiAgOK3vDCuXP+"
         "kctHYKYFCRSCa2qiuxpDFZM6cKt6OJ0WJBgkswamVAAAgAEAAIAAAACAAQAAAAAAAAAA";
 
-    char mnemonic[256];
-    size_t mnemonic_size = sizeof(mnemonic);
-
-    psa_status_t status;
-    status = bitcoin_client_recover(
-        "guess nuclear width pave clap crumble rain dance nurse bind parrot yellow");
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_verify(mnemonic, &mnemonic_size);
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_confirm("1", mnemonic);
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
-    status = bitcoin_client_open("1", "sigzone");
-    TEST_ASSERT_EQUAL(PSA_SUCCESS, status);
+    open_wallet();
 
     psbt_t psbt = {0};
     psbt_result_t result = psbt_create_from_bin(&psbt, psbt_raw, psbt_raw_size);
@@ -176,8 +168,7 @@ static void test_signer()
 
     psbt_free(&psbt);
 
-    bitcoin_client_close();
-    bitcoin_client_destroy("1");
+    destroy_wallet();
 }
 
 static void init()
