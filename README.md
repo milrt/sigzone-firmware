@@ -47,4 +47,4 @@ west twister -T .
 ```
 
 ## Shell
-https://github.com/user-attachments/assets/1d8ab99f-acc1-493f-974d-9b9c33006e87
+https://github.com/user-attachments/assets/8aa9245f-a94b-4e02-a219-13dd58d694ad
