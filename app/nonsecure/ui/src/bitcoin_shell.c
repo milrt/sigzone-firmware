@@ -230,6 +230,22 @@ static int cmd_get_pubkey(const struct shell *shell, size_t argc, char **argv)
     return 0;
 }
 
+static int cmd_get_fingerprint(const struct shell *shell, size_t argc, char **argv)
+{
+    uint8_t fingerprint[4];
+
+    psa_status_t status = bitcoin_client_get_fingerprint(fingerprint);
+
+    if (status != PSA_SUCCESS) {
+        shell_error(shell, "Get fingerprint failed: %s", psa_strerror(status));
+        return -EIO;
+    }
+
+    shell_print(shell, "Fingerprint: %02x%02x%02x%02x", fingerprint[0], fingerprint[1],
+                fingerprint[2], fingerprint[3]);
+    return 0;
+}
+
 static int cmd_sign_hash(const struct shell *shell, size_t argc, char **argv)
 {
     if (argc != 3) {
@@ -419,6 +435,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
     SHELL_CMD_ARG(open, NULL, "Open wallet <pin> <passphrase>", cmd_open, 3, 0),
     SHELL_CMD_ARG(close, NULL, "Close wallet", cmd_close, 1, 0),
     SHELL_CMD_ARG(get_pubkey, NULL, "Get pubkey <derivation_path>", cmd_get_pubkey, 2, 0),
+    SHELL_CMD_ARG(get_fingerprint, NULL, "Get fingerprint", cmd_get_fingerprint, 1, 0),
     SHELL_CMD_ARG(sign_hash, NULL, "Sign hash <derivation_path> <hash_hex>", cmd_sign_hash, 3, 0),
     SHELL_CMD_ARG(set_network, NULL, "Set Bitcoin network <mainnet|testnet>", cmd_set_network, 2,
                   0),
