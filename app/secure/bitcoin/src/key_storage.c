@@ -6,7 +6,7 @@
 #include "psa/crypto_types.h"
 #include "psa/crypto_values.h"
 #include "psa/error.h"
-#include "shared/hash.h"
+#include "tfm_crypto_defs.h"
 #include <mbedtls/gcm.h>
 #include <mbedtls/platform_util.h>
 #include <psa/internal_trusted_storage.h>
@@ -20,6 +20,7 @@
 #define PBKDF2_ITERATIONS (10000)
 #define PBKDF2_KEY_SIZE (32)
 #define SALT_SIZE (16)
+#define DERIVED_KEY_SIZE (32)
 #define IV_SIZE (12)
 #define TAG_SIZE (16)
 
@@ -31,27 +32,45 @@ typedef struct {
     uint32_t fail_count; // TODO: must be tamperevident
 } key_storage_data_t;
 
-static psa_status_t derive_key_from_pin(const char *pin, size_t pin_len, const uint8_t *salt,
-                                        size_t salt_len, uint8_t derived_key[PBKDF2_KEY_SIZE])
+static psa_status_t derive_key_from_pin_and_huk(const char *pin, size_t pin_len,
+                                                const uint8_t *salt, size_t salt_len,
+                                                uint8_t derived_key[DERIVED_KEY_SIZE])
 {
     if (!pin || !salt || !derived_key) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    uint8_t tmp[64];
-    memset(tmp, 0, sizeof(tmp));
+    psa_status_t status;
+    psa_key_derivation_operation_t op = PSA_KEY_DERIVATION_OPERATION_INIT;
 
-    psa_status_t status = hash_pbkdf2_hmac_sha512((const uint8_t *)pin, pin_len, salt, salt_len,
-                                                  PBKDF2_ITERATIONS, tmp, sizeof(tmp));
+    status = psa_key_derivation_setup(&op, PSA_ALG_HKDF(PSA_ALG_SHA_256));
     if (status != PSA_SUCCESS) {
-        mbedtls_platform_zeroize(tmp, sizeof(tmp));
         return status;
     }
 
-    memcpy(derived_key, tmp, PBKDF2_KEY_SIZE);
+    status = psa_key_derivation_input_bytes(&op, PSA_KEY_DERIVATION_INPUT_SALT, salt, salt_len);
+    if (status != PSA_SUCCESS) {
+        psa_key_derivation_abort(&op);
+        return status;
+    }
 
-    mbedtls_platform_zeroize(tmp, sizeof(tmp));
-    return PSA_SUCCESS;
+    status =
+        psa_key_derivation_input_key(&op, PSA_KEY_DERIVATION_INPUT_SECRET, TFM_BUILTIN_KEY_ID_HUK);
+    if (status != PSA_SUCCESS) {
+        psa_key_derivation_abort(&op);
+        return status;
+    }
+
+    status = psa_key_derivation_input_bytes(&op, PSA_KEY_DERIVATION_INPUT_INFO,
+                                            (const uint8_t *)pin, pin_len);
+    if (status != PSA_SUCCESS) {
+        psa_key_derivation_abort(&op);
+        return status;
+    }
+
+    status = psa_key_derivation_output_bytes(&op, derived_key, DERIVED_KEY_SIZE);
+    psa_key_derivation_abort(&op);
+    return status;
 }
 
 static psa_status_t encrypt_data(const uint8_t *derived_key, const uint8_t *iv,
@@ -205,12 +224,12 @@ psa_status_t key_storage_store(const magic_internet_key_t *keys, const char *pin
         return status;
     }
 
-    // 2) Derive key from PIN
+    // 2) Derive key from PIN and HUK
     uint8_t derived_key[PBKDF2_KEY_SIZE];
     memset(derived_key, 0, sizeof(derived_key));
-
     size_t pin_len = strlen(pin);
-    status = derive_key_from_pin(pin, pin_len, data.salt, SALT_SIZE, derived_key);
+
+    status = derive_key_from_pin_and_huk(pin, pin_len, data.salt, SALT_SIZE, derived_key);
     if (status != PSA_SUCCESS) {
         goto cleanup;
     }
@@ -262,7 +281,7 @@ psa_status_t key_storage_load(const char *pin, magic_internet_key_t *keys)
     memset(derived_key, 0, sizeof(derived_key));
     size_t pin_len = strlen(pin);
 
-    status = derive_key_from_pin(pin, pin_len, data.salt, SALT_SIZE, derived_key);
+    status = derive_key_from_pin_and_huk(pin, pin_len, data.salt, SALT_SIZE, derived_key);
     if (status != PSA_SUCCESS) {
         goto cleanup;
     }
