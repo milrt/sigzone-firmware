@@ -15,6 +15,7 @@ add_library(bitcoin STATIC
     src/bip39.c
     src/bip32.c
     src/key_storage.c
+    src/nv_counter.c
     src/secp256k1_context.c
 
     # Tests

@@ -25,5 +25,5 @@
         "version_policy": "STRICT",
       },
     ],
-  "dependencies": ["TFM_CRYPTO", "TFM_INTERNAL_TRUSTED_STORAGE_SERVICE"],
+  "dependencies": ["TFM_CRYPTO", "TFM_PROTECTED_STORAGE_SERVICE"],
 }
